@@ -1,0 +1,57 @@
+name: create-scad-and-stl-release
+on:
+  push:
+    # Sequence of patterns matched against refs/tags
+    tags:
+    - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
+
+jobs:
+  build_scad:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Setup Env
+      shell: bash
+      run: |
+        sudo add-apt-repository ppa:deadsnakes/ppa
+        sudo apt install python3.11 python3.11-venv openscad -y
+        python3.11 -m venv .pyenv
+        source .pyenv/bin/activate
+        pip install --upgrade pip
+        pip install solidpython2
+    - name: Run Feet Script
+      shell: bash
+      run: |
+        source .pyenv/bin/activate
+        python3.11 "${{ github.workspace }}/src/feet.py"
+    - name: Archive production artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: generated-scad
+        path: |
+          ${{ github.workspace }}/build/*
+    - name: Run Feet Script
+      shell: bash
+      run: |
+        cd build
+        tar -cJf feet_scad_stl.tar.xz *.scad *.stl
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        draft: false
+        prerelease: false
+    - name: Upload Release Asset
+      id: upload-release-asset 
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }} 
+        asset_path: ./build/feet_scad_stl.tar.xz
+        asset_name: feet_scad_stl.tar.xz
+        asset_content_type: application/x-gtar
