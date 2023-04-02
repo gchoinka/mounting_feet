@@ -1,15 +1,18 @@
 import os
 import shutil
+from typing import List, Any
 
 from solid2 import *
-from math import sin
+from math import sin, pi
+
+from solid2 import OpenSCADConstant
 
 
 def square_with_cut_corners(width, depth, cutoff_length):
-    a = sin(math.pi / 4) / sin(math.pi / 2) * cutoff_length
-    points = [[-depth / 2, -width / 2 + a], [-depth / 2 + a, -width / 2], [width / 2 - a, -width / 2],
-              [width / 2, -width / 2 + a], [width / 2, width / 2 - a], [width / 2 - a, width / 2],
-              [-depth / 2 + a, width / 2], [-depth / 2, width / 2 - a]]
+    a = sin(pi / 4) / sin(pi / 2) * cutoff_length
+    points = [(-depth / 2, -width / 2 + a), (-depth / 2 + a, -width / 2), (width / 2 - a, -width / 2),
+              (width / 2, -width / 2 + a), (width / 2, width / 2 - a), (width / 2 - a, width / 2),
+              (-depth / 2 + a, width / 2), (-depth / 2, width / 2 - a)]
     return linear_extrude(0.01)(polygon(points))
 
 
@@ -102,7 +105,7 @@ def main(output_scad_basename, output_stl_basename):
 
 
 if __name__ == "__main__":
-    skip_stl = False  # creating the stl takes more time and prints stuf on stdout, so you may disable it
+    skip_stl = False  # creating the stl takes more time and prints stuff on stdout, so you may disable it
     build_path = os.path.dirname(os.path.realpath(__file__))
     output_path = os.path.abspath(os.path.join(build_path, '..', 'build')) + os.path.sep
     if not os.path.exists(output_path):
