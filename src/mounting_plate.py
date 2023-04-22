@@ -1,3 +1,4 @@
+import dataclasses
 import os
 import shutil
 
@@ -5,10 +6,20 @@ from solid2 import *
 from math import sin, pi
 
 
+@dataclasses
+class Point:
+    x: float
+    y: float
+
+
 def drill_patter():
-    pattern0 = cylinder(r=6/2, h=1)
+    top_left = [Point(x=467, y=315), Point(x=380, y=315), Point(x=361, y=315), Point(x=278, y=315)]
+    top_right = [Point(x=211.5, y=315), Point(x=127.5, y=315), Point(x=109, y=315), Point(x=25, y=315)]
+    mid = []
+    pattern0 = cylinder(r=6 / 2, h=1)
 
     return [(pattern0, "pattern0"), ]
+
 
 def main(output_scad_basename, output_stl_basename):
     to_output = drill_patter()
