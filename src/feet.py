@@ -1,19 +1,14 @@
-import dataclasses
+import math  # noqa
 import os
 import shutil
-from typing import List, Any
 
 from solid2 import *
-from math import sin, pi
 
 unprintable_thickness = 0.01
 
-def half(v):
-    return v / 2
-
 
 def square_with_cut_corners(width, depth, cutoff_length):
-    a = sin(pi / 4) / sin(pi / 2) * cutoff_length
+    a = math.sin(math.pi / 4) / math.sin(math.pi / 2) * cutoff_length
     points = [(-depth / 2, -width / 2 + a), (-depth / 2 + a, -width / 2), (width / 2 - a, -width / 2),
               (width / 2, -width / 2 + a), (width / 2, width / 2 - a), (width / 2 - a, width / 2),
               (-depth / 2 + a, width / 2), (-depth / 2, width / 2 - a)]
@@ -25,13 +20,13 @@ def screw_negative_with_washer():
     washer_r = 12.5 / 2
     screw_r = 3 / 2
     washer = cylinder(r2=washer_r, r1=washer_r * 1.25, h=h, center=True)
-    screw = cylinder(r=screw_r, h=30, center=True,_fn=20)
+    screw = cylinder(r=screw_r, h=30, center=True, _fn=20)
     return (washer + screw).up(h / 2)
 
 
 def screw_negative():
-    h = 3.5
-    head_r = 7.5 / 2
+    h = 5
+    head_r = 9 / 2
     screw_r = 3 / 2
     head = cylinder(r2=screw_r, r1=head_r, h=h, center=True)
     screw = cylinder(r=screw_r, h=30, center=True, _fn=20)
@@ -151,37 +146,40 @@ def make_shoe(clearance, flipt_to_print=True, shorten=True):
     a = feet_height
     b = feet_height / 2
     c = math.sqrt(a ** 2 + b ** 2)
-    alpha = math.asin(a / c) / pi * 180 if flipt_to_print else 0
+    alpha = math.asin(a / c) / math.pi * 180 if flipt_to_print else 0
     shoe = shoe.rotate([0, -alpha + 180, 90])
 
     return shoe, {"width": top_width, "depth": top_depth}
 
 
-def make_double_shoe(clearance):
-    shoe_left = make_shoe(clearance=1, flipt_to_print=True)
-    shoe_right = make_shoe(clearance=1, flipt_to_print=True)
+def make_double_shoe(clearance, shorten=True):
+    shoe_left = make_shoe(clearance=1, flipt_to_print=True, shorten=shorten)
+    shoe_right = make_shoe(clearance=1, flipt_to_print=True, shorten=shorten)
     double_shoe = shoe_left[0].left(shoe_left[1]["width"] / 2) + shoe_right[0].right(shoe_right[1]["width"] / 2)
     return double_shoe
 
 
 def main(output_scad_basename, output_stl_basename):
-    to_output = [
-        (make_feet(breaking_point=True, with_screws=True, with_slopes=True, shorten=True, clearance=0), "feet")]
-    to_output += [(make_shoe(clearance=1)[0], "shoe")]
-    to_output += [(make_double_shoe(clearance=1), "shoe_pair")]
+    def output():
+        yield make_feet(breaking_point=True, with_screws=True, with_slopes=True, shorten=True, clearance=0), "feet"
+        yield make_shoe(clearance=1)[0], "shoe_short"
+        yield make_shoe(clearance=1, shorten=False)[0], "shoe_full"
+        yield make_double_shoe(clearance=1), "shoe_pair"
+        yield make_double_shoe(clearance=1, shorten=False), "shoe_pair_full"
+
     if output_scad_basename is not None:
-        for obj, filename_prefix in to_output:
+        for obj, filename_prefix in output():
             filename = output_scad_basename + filename_prefix + ".scad"
             obj.save_as_scad(filename)
 
     if output_stl_basename is not None:
-        for obj, filename_prefix in to_output:
+        for obj, filename_prefix in output():
             filename = output_scad_basename + filename_prefix + ".stl"
             obj.save_as_stl(filename)
 
 
 if __name__ == "__main__":
-    skip_stl = False  # creating the stl takes more time and prints stuff on stdout, so you may disable it
+    skip_stl = False
     build_path = os.path.dirname(os.path.realpath(__file__))
     output_path = os.path.abspath(os.path.join(build_path, '..', 'build')) + os.path.sep
     if not os.path.exists(output_path):
