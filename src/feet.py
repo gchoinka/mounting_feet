@@ -89,7 +89,7 @@ def make_wing(feet_dim: Tuple[float, float, float], edge_depth: float, inside_de
 
         poly = linear_extrude(unprintable_thickness)(polygon(points=p))
         top_flap = poly.translate([-clearance, clearance, feet_dim[2]])
-        bottom_flap = poly.translate([-(clearance - 2), clearance, feet_dim[2] - wing_dim[2] + clearance])
+        bottom_flap = poly.translate([-(clearance - 2), clearance, feet_dim[2] - wing_dim[2] - clearance])
         wing = hull()(top_flap, bottom_flap)
         return wing
     else:
@@ -106,7 +106,7 @@ class FeetOptions:
     breaking_point: bool = True
     slope_mode: SlopesMode = SlopesMode.sloped
     screws: bool = True
-    short: bool = False # TODO rename
+    short: bool = False
 
 
 def make_feet(opt: FeetOptions, clearance: SizeMM = 0.0) -> OpenSCADObject:
@@ -166,7 +166,7 @@ def make_shoe(opt: ShoeOptions) -> Tuple[OpenSCADObject, P2]:
     left_right_rim_with: SizeMM = 18.5
     shoe_feet_height: SizeMM = g_feet_height
 
-    shoe_top: P2 = (g_top_feet[0] + left_right_rim_with, g_top_feet[1] + rim_with)
+    shoe_top: P2 = (g_top_feet[0] + rim_with, g_top_feet[1] + left_right_rim_with)
 
     top_surface = cube([shoe_top[0], shoe_top[1], unprintable_thickness], center=True).up(shoe_feet_height)
     bottom_surface = cube([shoe_top[0] + shoe_feet_height, shoe_top[1], unprintable_thickness], center=True)
