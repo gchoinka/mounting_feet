@@ -1,15 +1,21 @@
 import math  # noqa
-import multiprocessing
 from enum import Enum, auto
 import os
 import shutil
 import sys
 from dataclasses import dataclass
+import subprocess
 from typing import Iterable, Tuple, Dict, List
 
-from solid2 import cube, linear_extrude, polygon, cylinder, union, hull, scale, intersection, square, P2, P3
+from solid2 import cube, linear_extrude, polygon, cylinder, union, hull, scale, intersection, square, P2, P3, import_stl
 from solid2.core.object_base import OpenSCADObject
 from pathlib import Path
+
+VERBOSE = False
+if VERBOSE:
+    from multiprocessing.dummy import Pool
+else:
+    from multiprocessing import Pool
 
 SizeMM = float
 
@@ -18,8 +24,8 @@ preview_fix: SizeMM = 0.05  # add/subtract this to avoids openscad preview artef
 
 y_reduction = 0
 
-g_top_feet: P2 = (84.0, 84.0-y_reduction)
-g_bottom_feet: P2 = (72.0, 72.0-y_reduction)
+g_top_feet: P2 = (84.0, 84.0 - y_reduction)
+g_bottom_feet: P2 = (72.0, 72.0 - y_reduction)
 g_feet_height: SizeMM = 11.5
 
 washer_r: SizeMM = 10.5 / 2
@@ -28,11 +34,34 @@ washer_r2 = washer_r * 1.25
 screw_r: SizeMM = 3.5 / 2
 
 
+def render_to_stl_file(root: OpenSCADObject, filename: str) -> str:
+    if VERBOSE:
+        scad_file = Path(filename).with_suffix(".scad")
+        root.save_as_scad(scad_file)
+
+        args = ["openscad", "-o", filename, scad_file]
+        subprocess.check_output(args)
+
+        return Path(filename).absolute().as_posix()
+    else:
+        return root.save_as_stl(filename)
+
+
 def square_with_cut_corners(dim: P2, cutoff_length: SizeMM) -> OpenSCADObject:
     a = math.sin(math.pi / 4) / math.sin(math.pi / 2) * cutoff_length
     x, y = dim
-    points = [(x / -2 + 0, y / +2 - a), (x / -2 + a, y / +2 + 0), (x / +2 - a, y / +2 + 0), (x / +2 + 0, y / +2 - a),
-        (x / +2 + 0, y / -2 + a), (x / +2 - a, y / -2 + 0), (x / -2 + a, y / -2 + 0), (x / -2 + 0, y / -2 + a), ]
+    points = [
+        # @formatter:off
+        (x / -2 + 0, y / +2 - a),
+        (x / -2 + a, y / +2 + 0),
+        (x / +2 - a, y / +2 + 0),
+        (x / +2 + 0, y / +2 - a),
+        (x / +2 + 0, y / -2 + a),
+        (x / +2 - a, y / -2 + 0),
+        (x / -2 + a, y / -2 + 0),
+        (x / -2 + 0, y / -2 + a),
+        # @formatter:on
+    ]
     return linear_extrude(unprintable_thickness)(polygon(points))
 
 
@@ -111,10 +140,10 @@ class FeetOptions:
 
 def make_feet(opt: FeetOptions, clearance: SizeMM = 0.0) -> OpenSCADObject:
     depth_reduction: SizeMM = 74 / 2 if opt.short else 0
-    top_feet_dim: P2 = (g_top_feet[0] - clearance - depth_reduction, g_top_feet[1] - clearance )
+    top_feet_dim: P2 = (g_top_feet[0] - clearance - depth_reduction, g_top_feet[1] - clearance)
     feet_dim = (top_feet_dim[0], top_feet_dim[1], g_feet_height - clearance)
 
-    bottom_feet_dim: P2 = (g_bottom_feet[0] - clearance - depth_reduction, g_bottom_feet[1] - clearance )
+    bottom_feet_dim: P2 = (g_bottom_feet[0] - clearance - depth_reduction, g_bottom_feet[1] - clearance)
     top_corner_cutoff_length: SizeMM = 10
     bottom_corner_cutoff_length: SizeMM = 6
     flap_edge_depth: SizeMM = 37
@@ -141,7 +170,7 @@ def make_feet(opt: FeetOptions, clearance: SizeMM = 0.0) -> OpenSCADObject:
         screw_pos = [[top_feet_dim[0] / 2 - 13, top_feet_dim[1] / 2 - 17, -preview_fix],
                      [top_feet_dim[0] / 2 - 32, top_feet_dim[1] / 2 - 13, -preview_fix],
                      [-bottom_feet_dim[0] / 2 + washer_r2, 0, -preview_fix],
-                     [bottom_feet_dim[0] / 2 - washer_r2*2, 0, -preview_fix]]
+                     [bottom_feet_dim[0] / 2 - washer_r2 * 2, 0, -preview_fix]]
         screws = union()(*(screw_negative_with_washer().translate(p) for p in screw_pos))
         feet = feet - screws - screws.mirrorY()
     if opt.breaking_point:
@@ -154,11 +183,15 @@ def make_feet(opt: FeetOptions, clearance: SizeMM = 0.0) -> OpenSCADObject:
     return feet
 
 
+class ShoeParts(Enum):
+    top = auto()
+    bottom = auto()
+    full = auto()
+
 @dataclass
 class ShoeOptions:
-    shoe_top: bool = False
+    shoe_part: ShoeParts = ShoeParts.full
     flipt_to_print: bool = False
-    short: bool = False
 
 
 def make_shoe(opt: ShoeOptions) -> Tuple[OpenSCADObject, P2]:
@@ -173,22 +206,22 @@ def make_shoe(opt: ShoeOptions) -> Tuple[OpenSCADObject, P2]:
 
     shoe_mold = hull()(top_surface, bottom_surface)
     feet_negative = make_feet(
-        FeetOptions(breaking_point=False, slope_mode=SlopesMode.back_sloped, screws=False, short=False, ),
+        FeetOptions(breaking_point=False, slope_mode=SlopesMode.back_sloped, screws=False, short=False),
         clearance=-0.35)
     feet_negative = feet_negative.up(-preview_fix)
 
     shoe = shoe_mold - feet_negative
 
-    if opt.short or opt.shoe_top:
+    if opt.shoe_part != ShoeParts.full:
         cutoff_top_surface = square_with_cut_corners((shoe_top[0], shoe_top[1]), 29).up(shoe_feet_height)
         cutoff_bottom_surface = square_with_cut_corners((shoe_top[0], shoe_top[1]), 29).down(preview_fix)
 
         cutoff = hull()(cutoff_top_surface, cutoff_bottom_surface).left(shoe_top[0] / 2 - 7)
         cutoff += cube([shoe_top[0], shoe_top[1], shoe_feet_height + 2], center=True).up(shoe_feet_height / 2).left(
             shoe_top[0] / 2 + 10)
-        if opt.short:
+        if opt.shoe_part == ShoeParts.bottom:
             shoe -= scale(1.001)(cutoff)
-        if opt.shoe_top:
+        if opt.shoe_part == ShoeParts.top:
             shoe = intersection()(shoe, cutoff)
 
     screw_sink: SizeMM = 0.7
@@ -220,16 +253,19 @@ def make_shoe(opt: ShoeOptions) -> Tuple[OpenSCADObject, P2]:
 
 def stl_task_function(stl_task: Tuple[OpenSCADObject, str]) -> None:
     obj, filename = stl_task
-    obj.save_as_stl(filename)
+    render_to_stl_file(obj, filename)
 
 
 def main(output_scad_basename: str, output_stl_basename: str | None) -> None:
-    output = [(
-    make_feet(FeetOptions(breaking_point=False, slope_mode=SlopesMode.sloped, screws=True, short=True), clearance=0.0),
-    "feet"), (make_shoe(ShoeOptions(short=True))[0], "shoe_short"),
-        (make_shoe(ShoeOptions(short=False, shoe_top=True))[0], "shoe_top"),
-        (make_shoe(ShoeOptions(short=False ))[0], "shoe_full"),  # (make_double_shoe(), "shoe_pair"),
+    output = [
+        # @formatter:off
+        (make_feet(FeetOptions(breaking_point=False, slope_mode=SlopesMode.sloped, screws=True, short=True), clearance=0.0), "feet"),
+        (make_shoe(ShoeOptions(shoe_part=ShoeParts.bottom))[0], "shoe_short"),
+        (make_shoe(ShoeOptions(shoe_part=ShoeParts.top))[0], "shoe_top"),
+        (make_shoe(ShoeOptions(shoe_part=ShoeParts.full))[0], "shoe_full"),
+        # (make_double_shoe(), "shoe_pair"),
         # (make_double_shoe(shorten=False), "shoe_pair_full"),
+        # @formatter:on
     ]
 
     stl_task: List[Tuple[OpenSCADObject, str]] = []
@@ -249,7 +285,7 @@ def main(output_scad_basename: str, output_stl_basename: str | None) -> None:
     all_obj.save_as_scad(filename)
     stl_task.append((all_obj, output_scad_basename + f"{Path(__file__).stem}_all.stl"))
     if output_stl_basename is not None:
-        with multiprocessing.Pool() as pool:
+        with Pool() as pool:
             pool.map(stl_task_function, stl_task)
 
 
